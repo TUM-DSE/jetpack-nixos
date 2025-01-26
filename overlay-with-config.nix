@@ -1,5 +1,5 @@
 # device-specific packages that are influenced by the nixos config
-config:
+config: nvidia-jetpack:
 
 let
   inherit (config.networking) hostName;
@@ -18,10 +18,12 @@ final: prev: (
       extraMakeFlags = cfg.firmware.optee.extraMakeFlags;
     };
 
-    flashTools = cfg.flasherPkgs.callPackages (import ./device-pkgs { inherit config; pkgs = final; }) { };
+    flashTools = cfg.flasherPkgs.callPackages (import ./device-pkgs { inherit config; pkgs = final; }) {
+      inherit nvidia-jetpack;
+    };
   in
   {
-    nvidia-jetpack = prev.nvidia-jetpack.overrideScope (finalJetpack: prevJetpack: {
+    nvidia-jetpack = nvidia-jetpack.overrideScope (finalJetpack: prevJetpack: {
       socType =
         if cfg.som == null then null
         else if lib.hasPrefix "orin-" cfg.som then "t234"
