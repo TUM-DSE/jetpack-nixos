@@ -13,6 +13,7 @@ in
 , autoAddDriverRunpath
 , symlinkJoin
 , expat
+, callPackage
 , pkg-config
 , substituteAll
 , l4t-3d-core
@@ -174,7 +175,21 @@ let
   } // args);
 
   nsight_compute_version = "2022.2.1";
+  flags = cudaPackages'.flags.override {
+    inherit cudaVersion;
+    gpus = cudaPackages'.gpus;
+  };
   cudaPackages = {
+    inherit cudaVersion lib flags;
+    inherit (cudaPackages') gpus nvccCompatibilities;
+    # TODO(@connorbaker): `cudaFlags` is an alias for `flags` which should be removed in the future.
+    cudaFlags = flags;
+
+    cudaMajorVersion = lib.versions.major cudaVersion;
+    cudaMajorMinorVersion = lib.versions.majorMinor cudaVersion;
+    cudaOlder = lib.strings.versionOlder cudaVersion;
+    cudaAtLeast = lib.strings.versionAtLeast cudaVersion;
+
     cuda_cccl = buildFromSourcePackage { name = "cuda-thrust"; };
     cuda_cudart = buildFromSourcePackage {
       name = "cuda-cudart";
@@ -217,6 +232,8 @@ let
     };
     cuda_nvdisasm = buildFromSourcePackage { name = "cuda-nvdisasm"; };
     cuda_nvml_dev = buildFromSourcePackage { name = "cuda-nvml-dev"; };
+    # Not support on arm64
+    cuda_nvprof = null;
     cuda_nvprune = buildFromSourcePackage { name = "cuda-nvprune"; };
     cuda_nvrtc = buildFromSourcePackage {
       name = "cuda-nvrtc";
@@ -247,9 +264,15 @@ let
         # TODO: Remove when https://github.com/NixOS/nixpkgs/pull/277213 is merged
         chmod +x lib/*.so
       '';
+      outputs = ["out" "lib"];
+
+      postInstall = ''
+        moveToOutput lib "$lib"
+      '';
+
       # Without --add-needed autoPatchelf forgets $ORIGIN
       postFixup = ''
-        patchelf $out/lib/libcudnn.so --add-needed libcudnn_cnn_infer.so
+        patchelf $lib/lib/libcudnn.so --add-needed libcudnn_cnn_infer.so
       '';
     };
     libcublas = buildFromSourcePackage { name = "libcublas"; };
@@ -405,6 +428,10 @@ let
           ${nsight_out}/bin/nsys-ui $*
         '';
       };
+
+    backendStdenv = cudaPackages'.backendStdenv.override {
+      inherit cudaVersion;
+    };
 
     # Combined package. We construct it from the debs, since nvidia doesn't
     # distribute a combined cudatoolkit package for jetson
