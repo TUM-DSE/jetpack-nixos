@@ -1,5 +1,5 @@
 # device-specific packages that are influenced by the nixos config
-config:
+config: nvidia-jetpack:
 
 let
   inherit (config.networking) hostName;
@@ -11,23 +11,26 @@ final: prev: (
 
     inherit (final) lib;
 
-    tosArgs = {
-      inherit (final.nvidia-jetpack) socType;
-      inherit (cfg.firmware.optee) taPublicKeyFile;
-      opteePatches = cfg.firmware.optee.patches;
-      extraMakeFlags = cfg.firmware.optee.extraMakeFlags;
-    };
 
-    flashTools = cfg.flasherPkgs.callPackages (import ./device-pkgs { inherit config; pkgs = final; }) { };
+    flashTools = cfg.flasherPkgs.callPackages (import ./device-pkgs { inherit config; pkgs = final; }) {
+      inherit nvidia-jetpack;
+    };
   in
   {
-    nvidia-jetpack = prev.nvidia-jetpack.overrideScope (finalJetpack: prevJetpack: {
-      socType =
-        if cfg.som == null then null
-        else if lib.hasPrefix "orin-" cfg.som then "t234"
-        else if lib.hasPrefix "xavier-" cfg.som then "t194"
-        else throw "Unknown SoC type";
-
+    nvidia-jetpack = nvidia-jetpack.overrideScope (finalJetpack: prevJetpack:
+      let
+        socType =
+          if cfg.som == null then null
+          else if lib.hasPrefix "orin-" cfg.som then "t234"
+          else if lib.hasPrefix "xavier-" cfg.som then "t194"
+          else throw "Unknown SoC type";
+        tosArgs = {
+          inherit socType;
+          inherit (cfg.firmware.optee) taPublicKeyFile;
+          opteePatches = cfg.firmware.optee.patches;
+          extraMakeFlags = cfg.firmware.optee.extraMakeFlags;
+        };
+      in {
       chipId =
         if cfg.som == null then null
         else if lib.hasPrefix "orin-" cfg.som then "0x23"
@@ -112,7 +115,8 @@ final: prev: (
         inherit lib flash-tools;
         inherit (cfg.firmware) eksFile;
         inherit (cfg.flashScriptOverrides) flashArgs partitionTemplate preFlashCommands postFlashCommands;
-        inherit (finalJetpack) tosImage socType uefi-firmware;
+        inherit (finalJetpack) tosImage uefi-firmware;
+        inherit socType;
 
         additionalDtbOverlays = args.additionalDtbOverlays or cfg.flashScriptOverrides.additionalDtbOverlays;
         dtbsDir = config.hardware.deviceTree.package;
@@ -123,7 +127,7 @@ final: prev: (
           inherit (cfg.firmware.secureBoot) requiredSystemFeatures;
         }
         ((finalJetpack.mkFlashScript
-          final.pkgsBuildBuild.nvidia-jetpack.flash-tools # we need flash-tools for the buildPlatform
+          nvidia-jetpack.flash-tools # we need flash-tools for the buildPlatform
           {
             # TODO: Remove preSignCommands when we switch to using signedFirmware directly
             flashCommands = ''
@@ -148,7 +152,7 @@ final: prev: (
         }
         (''
           ${cfg.firmware.uefi.capsuleAuthentication.preSignCommands final.buildPackages}
-          bash ${final.pkgsBuildBuild.nvidia-jetpack.flash-tools}/generate_capsule/l4t_generate_soc_capsule.sh \
+          bash ${nvidia-jetpack.flash-tools}/generate_capsule/l4t_generate_soc_capsule.sh \
         '' + (lib.optionalString cfg.firmware.uefi.capsuleAuthentication.enable ''
           --trusted-public-cert ${cfg.firmware.uefi.capsuleAuthentication.trustedPublicCertPemFile} \
           --other-public-cert ${cfg.firmware.uefi.capsuleAuthentication.otherPublicCertPemFile} \
@@ -156,7 +160,7 @@ final: prev: (
         '') + ''
           -i ${finalJetpack.bup}/bl_only_payload \
           -o $out \
-          ${finalJetpack.socType}
+          ${socType}
         '');
 
       signedFirmware = final.runCommand "signed-${hostName}-${finalJetpack.l4tVersion}"

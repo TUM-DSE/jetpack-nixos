@@ -91,8 +91,8 @@
 
       formatter = forAllSystems ({ pkgs, ... }: pkgs.nixpkgs-fmt);
 
-      legacyPackages = forAllSystems ({ system, ... }:
-        (import nixpkgs { inherit system; overlays = [ self.overlays.default ]; }).nvidia-jetpack
+      legacyPackages = forAllSystems ({ pkgs, ... }:
+        (import ./overlay.nix pkgs pkgs).nvidia-jetpack
       );
     };
 }

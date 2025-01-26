@@ -8,6 +8,10 @@ let
     types;
 
   cfg = config.services.nvpmodel;
+
+  nvidia-jetpack = pkgs.callPackage ../packages.nix {
+    inherit config;
+  };
 in
 {
   options = {
@@ -36,14 +40,14 @@ in
         Type = "oneshot";
         Restart = "on-failure";
         RestartSec = "2s";
-        ExecStart = "${pkgs.nvidia-jetpack.l4t-nvpmodel}/bin/nvpmodel -f ${cfg.configFile}" + lib.optionalString (cfg.profileNumber != null) " -m ${builtins.toString cfg.profileNumber}";
+        ExecStart = "${nvidia-jetpack.l4t-nvpmodel}/bin/nvpmodel -f ${cfg.configFile}" + lib.optionalString (cfg.profileNumber != null) " -m ${builtins.toString cfg.profileNumber}";
       };
       wantedBy = [ "multi-user.target" ];
     };
 
     environment.etc."nvpmodel.conf".source = cfg.configFile;
-    environment.etc."nvpmodel".source = "${pkgs.nvidia-jetpack.l4t-nvpmodel}/etc/nvpmodel";
+    environment.etc."nvpmodel".source = "${nvidia-jetpack.l4t-nvpmodel}/etc/nvpmodel";
 
-    environment.systemPackages = with pkgs.nvidia-jetpack; [ l4t-nvpmodel ];
+    environment.systemPackages = with nvidia-jetpack; [ l4t-nvpmodel ];
   };
 }

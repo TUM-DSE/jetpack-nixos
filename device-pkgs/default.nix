@@ -11,14 +11,19 @@
 , nvidia-jetpack
 , writeShellApplication
 , buildPackages
+,
 }:
 
 let
   cfg = config.hardware.nvidia-jetpack;
   inherit (config.networking) hostName;
 
+  nvidia-jetpack = pkgs.callPackage ../packages.nix {
+    inherit config;
+  };
+
   # We need to grab some packages from the device's aarch64 package set.
-  inherit (pkgs.nvidia-jetpack)
+  inherit (nvidia-jetpack)
     chipId
     flashInitrd
     mkFlashScript

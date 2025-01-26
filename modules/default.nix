@@ -27,6 +27,11 @@ let
 
   nvidiaDockerActive = with config.virtualisation; docker.enable && docker.enableNvidia;
   nvidiaPodmanActive = with config.virtualisation; podman.enable && podman.enableNvidia;
+
+  nvidia-jetpack = pkgs.callPackage ../packages.nix {
+    inherit config;
+  };
+
 in
 {
   imports = [
@@ -170,16 +175,16 @@ in
     # downstream jetpack-nixos users. This should prevent a situation where a
     # user's overlay is merged before ours and that overlay depends on
     # something defined in our overlay.
-    nixpkgs.overlays = lib.mkBefore [
-      (import ../overlay.nix)
-      (import ../overlay-with-config.nix config)
-    ];
+    #nixpkgs.overlays = lib.mkBefore [
+    #  (import ../overlay.nix)
+    #  (import ../overlay-with-config.nix config)
+    #];
 
     boot.kernelPackages =
       if cfg.kernel.realtime then
-        pkgs.nvidia-jetpack.rtkernelPackages
+        nvidia-jetpack.rtkernelPackages
       else
-        pkgs.nvidia-jetpack.kernelPackages;
+        nvidia-jetpack.kernelPackages;
 
     boot.kernelParams = [
       # Needed on Orin at least, but upstream has it for both
@@ -215,7 +220,7 @@ in
 
     # TODO BSP UPDATE: Add check for bsp
     hardware.firmwareCompression = lib.mkForce "none";
-    hardware.firmware = with pkgs.nvidia-jetpack; [
+    hardware.firmware = with nvidia-jetpack; [
       l4t-firmware
       l4t-xusb-firmware # usb firmware also present in linux-firmware package, but that package is huge and has much more than needed
       cudaPackages.vpi2-firmware # Optional, but needed for pva_auth_allowlist firmware file used by VPI2
@@ -223,9 +228,9 @@ in
 
     hardware.deviceTree.enable = true;
 
-    hardware.graphics.package = pkgs.nvidia-jetpack.l4t-3d-core;
+    hardware.graphics.package = nvidia-jetpack.l4t-3d-core;
     hardware.graphics.extraPackages =
-      with pkgs.nvidia-jetpack;
+      with nvidia-jetpack;
       # l4t-core provides - among others - libnvrm_gpu.so and libnvrm_mem.so.
       # The l4t-core/lib directory is directly set in the DT_RUNPATH of
       # l4t-cuda's libcuda.so, thus the standard driver doesn't need them to be
@@ -267,7 +272,7 @@ in
 
     services.udev.packages = [
       (pkgs.runCommand "jetson-udev-rules" { } ''
-        install -D -t $out/etc/udev/rules.d ${pkgs.nvidia-jetpack.l4t-init}/etc/udev/rules.d/99-tegra-devices.rules
+        install -D -t $out/etc/udev/rules.d ${nvidia-jetpack.l4t-init}/etc/udev/rules.d/99-tegra-devices.rules
         sed -i \
           -e '/camera_device_detect/d' \
           -e 's#/bin/mknod#${pkgs.coreutils}/bin/mknod#' \
@@ -281,7 +286,7 @@ in
     services.xserver.drivers = lib.mkForce (
       lib.singleton {
         name = "nvidia";
-        modules = [ pkgs.nvidia-jetpack.l4t-3d-core ];
+        modules = [ nvidia-jetpack.l4t-3d-core ];
         display = true;
         screenSection = ''
           Option "AllowEmptyInitialConfiguration" "true"
@@ -300,10 +305,10 @@ in
         '';
 
     # Used by libjetsonpower.so, which is used by nvfancontrol at least.
-    environment.etc."nvpower/libjetsonpower".source = "${pkgs.nvidia-jetpack.l4t-tools}/etc/nvpower/libjetsonpower";
+    environment.etc."nvpower/libjetsonpower".source = "${nvidia-jetpack.l4t-tools}/etc/nvpower/libjetsonpower";
 
     # Include nv_tegra_release, just so we can tell what version our NixOS machine was built from.
-    environment.etc."nv_tegra_release".source = "${pkgs.nvidia-jetpack.l4t-core}/etc/nv_tegra_release";
+    environment.etc."nv_tegra_release".source = "${nvidia-jetpack.l4t-core}/etc/nv_tegra_release";
 
     # https://developer.ridgerun.com/wiki/index.php/Xavier/JetPack_5.0.2/Performance_Tuning
     systemd.services.jetson_clocks = mkIf cfg.maxClock {
@@ -311,7 +316,7 @@ in
       description = "Set maximum clock speed";
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${pkgs.nvidia-jetpack.l4t-tools}/bin/jetson_clocks";
+        ExecStart = "${nvidia-jetpack.l4t-tools}/bin/jetson_clocks";
       };
       after = [ "nvpmodel.service" ];
       wantedBy = [ "multi-user.target" ];
@@ -330,13 +335,13 @@ in
       lib.mkIf cfg.firmware.optee.supplicant.enable {
         description = "Userspace supplicant for OPTEE-OS";
         serviceConfig = {
-          ExecStart = "${pkgs.nvidia-jetpack.opteeClient}/bin/tee-supplicant ${args}";
+          ExecStart = "${nvidia-jetpack.opteeClient}/bin/tee-supplicant ${args}";
           Restart = "always";
         };
         wantedBy = [ "multi-user.target" ];
       };
 
-    environment.systemPackages = with pkgs.nvidia-jetpack; [
+    environment.systemPackages = with nvidia-jetpack; [
       l4t-tools
       otaUtils # Tools for UEFI capsule updates
     ];
@@ -351,16 +356,16 @@ in
       wantedBy = [ "multi-user.target" ];
       script =
         let
-          exe = lib.getExe pkgs.nvidia-jetpack.nvidia-ctk;
+          exe = lib.getExe nvidia-jetpack.nvidia-ctk;
         in
         ''
           ${exe} cdi generate \
             --nvidia-ctk-path=${exe} \
-            --driver-root=${pkgs.nvidia-jetpack.containerDeps} \
+            --driver-root=${nvidia-jetpack.containerDeps} \
             --ldconfig-path ${lib.getExe' pkgs.glibc "ldconfig"} \
             --dev-root=/ \
             --mode=csv \
-            --csv.file=${pkgs.nvidia-jetpack.l4tCsv} \
+            --csv.file=${nvidia-jetpack.l4tCsv} \
             --output="$RUNTIME_DIRECTORY/jetpack-nixos"
         '';
     };
