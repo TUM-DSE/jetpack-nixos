@@ -8,6 +8,9 @@ let
     types;
 
   cfg = config.services.nvfancontrol;
+  nvidia-jetpack = pkgs.callPackage ../packages.nix {
+    inherit config;
+  };
 in
 {
   options = {
@@ -27,14 +30,14 @@ in
       description = "NV Fan control";
       serviceConfig = {
         ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p /var/lib/nvfancontrol";
-        ExecStart = "${pkgs.nvidia-jetpack.l4t-nvfancontrol}/bin/nvfancontrol -f ${cfg.configFile}";
+        ExecStart = "${nvidia-jetpack.l4t-nvfancontrol}/bin/nvfancontrol -f ${cfg.configFile}";
       };
       wantedBy = [ "multi-user.target" ];
     };
 
     environment.etc."nvfancontrol.conf".source = cfg.configFile;
-    environment.etc."nvpower/nvfancontrol".source = "${pkgs.nvidia-jetpack.l4t-nvfancontrol}/etc/nvpower/nvfancontrol";
+    environment.etc."nvpower/nvfancontrol".source = "${nvidia-jetpack.l4t-nvfancontrol}/etc/nvpower/nvfancontrol";
 
-    environment.systemPackages = with pkgs.nvidia-jetpack; [ l4t-nvfancontrol ];
+    environment.systemPackages = with nvidia-jetpack; [ l4t-nvfancontrol ];
   };
 }

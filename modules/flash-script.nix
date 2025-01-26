@@ -9,12 +9,15 @@ let
     types;
 
   cfg = config.hardware.nvidia-jetpack;
+  nvidia-jetpack = pkgs.callPackage ../packages.nix {
+    inherit config;
+  };
 
   canUpdateFirmware = cfg.firmware.autoUpdate && cfg.som != null && cfg.flashScriptOverrides.targetBoard != null;
 
   updateFirmware = pkgs.writeShellApplication {
     name = "update-jetson-firmware";
-    runtimeInputs = [ pkgs.nvidia-jetpack.otaUtils ];
+    runtimeInputs = [ nvidia-jetpack.otaUtils ];
     text = ''
       # This directory is populated by ota-apply-capsule-update, don't run if
       # we already have a capsule update present on the ESP. We check the exact
@@ -34,7 +37,7 @@ let
       fi
 
       CUR_VER=$(cat /sys/devices/virtual/dmi/id/bios_version)
-      NEW_VER=${pkgs.nvidia-jetpack.l4tVersion}
+      NEW_VER=${nvidia-jetpack.l4tVersion}
 
       if [[ "$CUR_VER" != "$NEW_VER" ]]; then
         echo "Current Jetson firmware version is: $CUR_VER"
@@ -48,7 +51,7 @@ let
         # fixes/improvements.
         ota-setup-efivars ${cfg.flashScriptOverrides.targetBoard}
 
-        ota-apply-capsule-update ${pkgs.nvidia-jetpack.uefiCapsuleUpdate}
+        ota-apply-capsule-update ${nvidia-jetpack.uefiCapsuleUpdate}
       fi
     '';
   };
@@ -410,13 +413,13 @@ in
 
   config = lib.mkIf cfg.enable {
     hardware.nvidia-jetpack.flashScript = lib.warn "hardware.nvidia-jetpack.flashScript is deprecated, use config.system.build.flashScript" config.system.build.flashScript;
-    hardware.nvidia-jetpack.devicePkgs = (lib.mapAttrs (_: lib.warn "hardware.nvidia-jetpack.devicePkgs is deprecated, use pkgs.nvidia-jetpack") pkgs.nvidia-jetpack);
+    hardware.nvidia-jetpack.devicePkgs = (lib.mapAttrs (_: lib.warn "hardware.nvidia-jetpack.devicePkgs is deprecated, use pkgs.nvidia-jetpack") nvidia-jetpack);
 
     system.build = {
-      jetsonDevicePkgs = (lib.mapAttrs (_: lib.warn "system.build.jetsonDevicePkgs is deprecated, use pkgs.nvidia-jetpack") pkgs.nvidia-jetpack);
+      jetsonDevicePkgs = (lib.mapAttrs (_: lib.warn "system.build.jetsonDevicePkgs is deprecated, use pkgs.nvidia-jetpack") nvidia-jetpack);
 
       # Left here for compatibility
-      inherit (pkgs.nvidia-jetpack) uefiCapsuleUpdate flashScript initrdFlashScript fuseScript signedFirmware;
+      inherit (nvidia-jetpack) uefiCapsuleUpdate flashScript initrdFlashScript fuseScript signedFirmware;
     };
 
     hardware.nvidia-jetpack.flashScriptOverrides.flashArgs = lib.mkAfter (
@@ -502,7 +505,7 @@ in
       wantedBy = [ "multi-user.target" ];
       after = [ "opt-nvidia-esp.mount" ];
       serviceConfig.Type = "oneshot";
-      serviceConfig.ExecStart = "${pkgs.nvidia-jetpack.otaUtils}/bin/ota-setup-efivars ${cfg.flashScriptOverrides.targetBoard}";
+      serviceConfig.ExecStart = "${nvidia-jetpack.otaUtils}/bin/ota-setup-efivars ${cfg.flashScriptOverrides.targetBoard}";
     };
 
     # Include the capsule-on-disk firmware update method with the bootloader
@@ -545,7 +548,7 @@ in
 
     environment.systemPackages = lib.mkIf (cfg.firmware.autoUpdate && cfg.som != null && cfg.flashScriptOverrides.targetBoard != null) [
       (pkgs.writeShellScriptBin "ota-apply-capsule-update-included" ''
-        ${pkgs.nvidia-jetpack.otaUtils}/bin/ota-apply-capsule-update ${pkgs.nvidia-jetpack.uefiCapsuleUpdate}
+        ${nvidia-jetpack.otaUtils}/bin/ota-apply-capsule-update ${nvidia-jetpack.uefiCapsuleUpdate}
       '')
     ];
   };
