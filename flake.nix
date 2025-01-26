@@ -30,7 +30,7 @@
         installer_minimal_cross = nixpkgs.legacyPackages.x86_64-linux.pkgsCross.aarch64-multiplatform.nixos installer_minimal_config;
       };
 
-      nixosModules.default = import ./modules/default.nix;
+      nixosModules.default = ./modules/default.nix;
 
       overlays.default = import ./overlay.nix;
 
