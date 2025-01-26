@@ -403,7 +403,7 @@ in
       };
 
       devicePkgs = mkOption {
-        type = types.attrsOf types.anything;
+        type = types.raw;
         readOnly = true;
         internal = true;
         description = "Flashing packages associated with this NixOS configuration";
@@ -413,7 +413,7 @@ in
 
   config = lib.mkIf cfg.enable {
     hardware.nvidia-jetpack.flashScript = lib.warn "hardware.nvidia-jetpack.flashScript is deprecated, use config.system.build.flashScript" config.system.build.flashScript;
-    hardware.nvidia-jetpack.devicePkgs = (lib.mapAttrs (_: lib.warn "hardware.nvidia-jetpack.devicePkgs is deprecated, use pkgs.nvidia-jetpack") nvidia-jetpack);
+    hardware.nvidia-jetpack.devicePkgs = nvidia-jetpack;
 
     system.build = {
       jetsonDevicePkgs = (lib.mapAttrs (_: lib.warn "system.build.jetsonDevicePkgs is deprecated, use pkgs.nvidia-jetpack") nvidia-jetpack);
