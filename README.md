@@ -54,7 +54,7 @@ $ sudo dd if=./result/iso/nixos-22.11pre-git-aarch64-linux.iso of=/dev/sdX bs=1M
 ```
 (Replace `/dev/sdX` with the correct path for your USB drive)
 
-As an alternative, you could also try the generic ARM64 multiplatform ISO from NixOS. See https://nixos.wiki/wiki/NixOS_on_ARM/UEFI
+As an alternative, you could also try the generic ARM64 multiplatform ISO from NixOS. See https://wiki.nixos.org/wiki/NixOS_on_ARM/UEFI
 (Last I tried, this worked on Xavier AGX but not Orin AGX. We should do additional testing to see exactly what is working or not with the vendor kernel vs. mainline kernel)
 
 ### Installing NixOS
