@@ -11,6 +11,7 @@ in
 , makeWrapper
 , autoPatchelfHook
 , autoAddDriverRunpath
+, cudaPackages_12
 , symlinkJoin
 , expat
 , callPackage
@@ -56,6 +57,7 @@ in
 }:
 
 let
+  cudaPackages' = cudaPackages_12;
   # We should use gcc10 to match CUDA 11.4, but we get link errors on opencv and torch2trt if we do
   # ../../lib/libopencv_core.so.4.5.4: undefined reference to `__aarch64_ldadd4_acq_rel
   #
@@ -282,6 +284,7 @@ let
     libcusparse = buildFromSourcePackage { name = "libcusparse"; };
     libnpp = buildFromSourcePackage { name = "libnpp"; };
     libcudla = buildFromSourcePackage { name = "libcudla"; buildInputs = [ l4t-cuda ]; };
+    nccl = cudaPackages'.nccl;
     nsight_compute_target = buildFromDebs {
       name = "nsight-compute-target";
       version = nsight_compute_version;
