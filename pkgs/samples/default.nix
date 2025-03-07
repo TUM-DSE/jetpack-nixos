@@ -84,8 +84,8 @@ let
 
   cudnn-samples = stdenv.mkDerivation {
     pname = "cudnn-samples";
-    version = debs.common.libcudnn8-samples.version;
-    src = debs.common.libcudnn8-samples.src;
+    version = debs.common.libcudnn9-samples.version;
+    src = debs.common.libcudnn9-samples.src;
 
     unpackCmd = "dpkg -x $src source";
     sourceRoot = "source/usr/src/cudnn_samples_v8";
