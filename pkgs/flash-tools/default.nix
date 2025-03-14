@@ -80,7 +80,7 @@ let
     '' + (lib.optionalString (!stdenv.hostPlatform.isx86) ''
       # Wrap x86 binaries in qemu
       pushd bootloader/ >/dev/null
-      for filename in chkbdinfo mkbctpart mkbootimg mksparse tegrabct_v2 tegradevflash_v2 tegrahost_v2 tegrakeyhash tegraopenssl tegraparser_v2 tegrarcm_v2 tegrasign_v2; do
+      for filename in chkbdinfo mkbctpart mkbootimg mksparse tegrabct_v2 tegradevflash_v2 tegrahost_v2 tegraopenssl tegraparser_v2 tegrarcm_v2 tegrasign_v2; do
         mv "$filename" ."$filename"-wrapped
         cat >"$filename" <<EOF
       #!${runtimeShell}
