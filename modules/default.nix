@@ -227,6 +227,8 @@ in
       		./gpuvm_res/0002-Add-support-for-gpu-display-passthrough.patch
       		# Patch for nvdisplay driver
       		./gpuvm_res/0003-Add-support-for-display-passthrough.patch
+			# Fake patch to check if this code is executed
+			./gpuvm_res/fake.patch
     	];
   	}));
     # TODO BSP UPDATE: Add check for bsp
