@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, options, lib, pkgs, ... }:
 
 let
   inherit (lib)
@@ -11,6 +11,9 @@ let
   cfg = config.hardware.nvidia-jetpack;
 
   thor2505 = (lib.hasPrefix "thor" cfg.som) && (lib.versionOlder lib.trivial.version "25.11");
+
+  # Can't set nixpkgs.config when using an external pkgs instance (common with flakes)
+  canSetNixpkgsConfig = !options.nixpkgs.pkgs.isDefined;
 in
 {
   options = {
@@ -63,7 +66,8 @@ in
     hardware.nvidia-jetpack.configureCuda = lib.mkIf thor2505 (lib.mkForce false);
 
     # Advertise support for CUDA.
-    nixpkgs.config = mkIf cfg.configureCuda (mkBefore {
+    # Only set when not using an external pkgs instance (e.g., from flakes)
+    nixpkgs.config = mkIf (cfg.configureCuda && canSetNixpkgsConfig) (mkBefore {
       cudaSupport = true;
       cudaCapabilities =
         let
