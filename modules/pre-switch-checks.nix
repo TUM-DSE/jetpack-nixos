@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ nvidia-jetpack, config, lib, pkgs, ... }:
 
 let
   cfg = config.hardware.nvidia-jetpack;
@@ -28,7 +28,7 @@ let
     # bios_version contains the L4T version, possibly with a unique hash suffix
     # Strip everything after major.minor.patch
     running_l4t="$(${sed} 's/^\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/' < /sys/devices/virtual/dmi/id/bios_version)"
-    target_l4t="${pkgs.nvidia-jetpack.l4tMajorMinorPatchVersion}"
+    target_l4t="${nvidia-jetpack.l4tMajorMinorPatchVersion}"
   '';
 in
 {

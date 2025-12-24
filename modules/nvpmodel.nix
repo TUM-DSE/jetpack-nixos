@@ -21,7 +21,7 @@ let
 
 
   # This script is based of the nvpower.sh script nvidia provides
-  setupConf = pkgs.writeShellScriptBin "setupConf" (''
+  setupConf = pkgs.writeShellScriptBin "setupConf" ( ''
     compat=$(tr -d '\0' < /proc/device-tree/compatible)
 
     # xavier doesn't use the compat in the conf file name so we have to hard code the som 
@@ -41,7 +41,7 @@ let
       echo "Selected device som before hard coding: $device_som"
 
       # If there are no files that match the compat node use the default nvpower.sh uses
-      if [ ! -f ${pkgs.nvidia-jetpack.l4t-nvpmodel}/etc/nvpmodel/nvpmodel_"$device_som".conf ]; then
+      if [ ! -f ${nvidia-jetpack.l4t-nvpmodel}/etc/nvpmodel/nvpmodel_"$device_som".conf ]; then
         if [[ "$device_som" == 'p3767_0005_super' ]]; then
           # The nvpower script maps p3767_0005 -> p3767_0003 so doing the same here
           # for the super variant.
@@ -63,7 +63,7 @@ let
       echo "Selected device som after hard coding: $device_som"
     fi
 
-    ln -sf ${pkgs.nvidia-jetpack.l4t-nvpmodel}/etc/nvpmodel/nvpmodel_"$device_som".conf /etc/nvpmodel.conf
+    ln -sf ${nvidia-jetpack.l4t-nvpmodel}/etc/nvpmodel/nvpmodel_"$device_som".conf /etc/nvpmodel.conf
   ''
   + lib.optionalString (nvidia-jetpack.gpuDriver == "openrm") ''
     if [ ! -e /opt/nvidia/l4t-gpusetup/gpu_pg_mask ] ; then
