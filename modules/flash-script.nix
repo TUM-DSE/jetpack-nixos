@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ nvidia-jetpack, config, pkgs, lib, ... }:
 
 # Convenience package that allows you to set options for the flash script using the NixOS module system.
 # You could do the overrides yourself if you'd prefer.
@@ -415,17 +415,19 @@ in
 
   config = lib.mkIf cfg.enable {
     hardware.nvidia-jetpack.flashScript = lib.warn "hardware.nvidia-jetpack.flashScript is deprecated, use config.system.build.flashScript" config.system.build.flashScript;
-    hardware.nvidia-jetpack.devicePkgs = (lib.mapAttrs (_: lib.warn "hardware.nvidia-jetpack.devicePkgs is deprecated, use pkgs.nvidia-jetpack") pkgs.nvidia-jetpack);
+    # Assign directly without mapAttrs to avoid eager evaluation of all nvidia-jetpack attributes
+    # The deprecation warning is in the option description instead
+    hardware.nvidia-jetpack.devicePkgs = nvidia-jetpack;
 
     system.build = lib.mkMerge [
       {
-        jetsonDevicePkgs = (lib.mapAttrs (_: lib.warn "system.build.jetsonDevicePkgs is deprecated, use pkgs.nvidia-jetpack") pkgs.nvidia-jetpack);
+        jetsonDevicePkgs = nvidia-jetpack;
 
         # Left here for compatibility
-        inherit (pkgs.nvidia-jetpack) uefiCapsuleUpdate flashScript initrdFlashScript legacyFlashScript fuseScript signedFirmware;
+        inherit (nvidia-jetpack) uefiCapsuleUpdate flashScript initrdFlashScript legacyFlashScript fuseScript signedFirmware;
 
       }
-      (lib.optionalAttrs cfg.firmware.fskp.enable { inherit (pkgs.nvidia-jetpack) fskpFuseScript; })
+      (lib.optionalAttrs cfg.firmware.fskp.enable { inherit (nvidia-jetpack) fskpFuseScript; })
     ];
 
     hardware.nvidia-jetpack.flashScriptOverrides.flashArgs = lib.mkAfter (

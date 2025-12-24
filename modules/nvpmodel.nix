@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ nvidia-jetpack, config, lib, pkgs, ... }:
 
 let
   inherit (lib)
@@ -65,7 +65,7 @@ let
 
     ln -sf ${pkgs.nvidia-jetpack.l4t-nvpmodel}/etc/nvpmodel/nvpmodel_"$device_som".conf /etc/nvpmodel.conf
   ''
-  + lib.optionalString (pkgs.nvidia-jetpack.gpuDriver == "openrm") ''
+  + lib.optionalString (nvidia-jetpack.gpuDriver == "openrm") ''
     if [ ! -e /opt/nvidia/l4t-gpusetup/gpu_pg_mask ] ; then
       mkdir -p /opt/nvidia/l4t-gpusetup
       echo "gpu_pg_mask_param=${toString cfg.initialGpuPgMaskParam}" >/opt/nvidia/l4t-gpusetup/gpu_pg_mask
@@ -122,7 +122,7 @@ in
         RestartSec = "2s";
         RestartMode = "direct"; # Keep auto-restarts in activating state instead of transitioning to failed (temporarily)
         ExecStartPre = mkIf (cfg.configFile == null) (lib.getExe setupConf);
-        ExecStart = "${pkgs.nvidia-jetpack.l4t-nvpmodel}/bin/nvpmodel -f /etc/nvpmodel.conf" + lib.optionalString (cfg.profileNumber != null) " -m ${builtins.toString cfg.profileNumber}";
+        ExecStart = "${nvidia-jetpack.l4t-nvpmodel}/bin/nvpmodel -f /etc/nvpmodel.conf" + lib.optionalString (cfg.profileNumber != null) " -m ${builtins.toString cfg.profileNumber}";
       };
       wantedBy = [ "multi-user.target" ];
     };
@@ -130,9 +130,9 @@ in
     environment.etc."nvpmodel.conf" = mkIf (cfg.configFile != null) {
       source = cfg.configFile;
     };
-    environment.etc."nvpmodel".source = "${pkgs.nvidia-jetpack.l4t-nvpmodel}/etc/nvpmodel";
+    environment.etc."nvpmodel".source = "${nvidia-jetpack.l4t-nvpmodel}/etc/nvpmodel";
 
-    environment.systemPackages = with pkgs.nvidia-jetpack; [ l4t-nvpmodel ];
+    environment.systemPackages = with nvidia-jetpack; [ l4t-nvpmodel ];
 
     services.nvpmodel.initialGpuPgMaskParam = lib.mkIf (cfg.profileNumber != null && builtins.hasAttr profileString initialGpuPgMaskParamDefaults) (lib.mkDefault (
       builtins.getAttr profileString initialGpuPgMaskParamDefaults

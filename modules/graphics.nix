@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ nvidia-jetpack, config, lib, pkgs, ... }:
 
 let
   inherit (lib)
@@ -33,13 +33,15 @@ in
 
   config = mkIf cfg.enable (lib.mkMerge [
     {
-      boot.blacklistedKernelModules = [ "nouveau" ];
+      
+
+    boot.blacklistedKernelModules = [ "nouveau" ];
 
       # For Orin on JP5. Unsupported with PREEMPT_RT.
       boot.extraModulePackages = lib.optional (cfg.majorVersion == "5" && !cfg.kernel.realtime)
         config.boot.kernelPackages.nvidia-display-driver;
 
-      hardware.graphics.package = pkgs.nvidia-jetpack.l4t-3d-core;
+      hardware.graphics.package = nvidia-jetpack.l4t-3d-core;
       hardware.graphics.extraPackages =
         let
           # Join and post-process all the other packages providing libs which could be considered part of the driver.
@@ -63,7 +65,7 @@ in
                   "l4t-wayland"
                 ]
                   (lib.const null))
-                pkgs.nvidia-jetpack);
+                nvidia-jetpack);
             # Exclude all the non-lib/bin stuff.
             # NOTE: Using --force avoids failing when the directory does not exist.
             postBuild = ''
@@ -118,7 +120,7 @@ in
       services.xserver.drivers = lib.mkForce (
         lib.singleton {
           name = "nvidia";
-          modules = [ pkgs.nvidia-jetpack.l4t-3d-core ];
+          modules = [ nvidia-jetpack.l4t-3d-core ];
           display = true;
           screenSection = ''
             Option "AllowEmptyInitialConfiguration" "true"
@@ -204,7 +206,7 @@ in
         options nvidia NVreg_PreserveVideoMemoryAllocations=1
       '';
 
-      hardware.firmware = [ pkgs.nvidia-jetpack.l4t-firmware-openrm ];
+      hardware.firmware = [ nvidia-jetpack.l4t-firmware-openrm ];
     })
   ]);
 }

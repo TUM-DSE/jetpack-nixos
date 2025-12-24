@@ -1,5 +1,9 @@
 # device-specific packages that are influenced by the nixos config
 config:
+# nvidia-jetpack base scope for target platform (passed explicitly to avoid overlay dependency)
+nvidia-jetpack:
+# nvidia-jetpack for build platform (x86_64) - needed for flash-tools
+nvidia-jetpack-build:
 
 final: prev: (
   let
@@ -9,10 +13,20 @@ final: prev: (
 
     jetpackAtLeast = lib.versionAtLeast cfg.majorVersion;
 
-    flashTools = cfg.flasherPkgs.callPackages (import ./device-pkgs { inherit config; pkgs = final; }) { };
+    # Compute socType here since we can't reference finalJetpack.socType in tosArgs
+    socType =
+      if cfg.som == null then null
+      else if lib.hasPrefix "thor-" cfg.som then "t264"
+      else if lib.hasPrefix "orin-" cfg.som then "t234"
+      else if lib.hasPrefix "xavier-" cfg.som then "t194"
+      else throw "Unknown SoC type";
+
+    flashTools = cfg.flasherPkgs.callPackages (import ./device-pkgs { inherit config; pkgs = final; }) {
+      inherit nvidia-jetpack;
+    };
   in
   {
-    nvidia-jetpack = prev.nvidia-jetpack.overrideScope (finalJetpack: prevJetpack: {
+    nvidia-jetpack = nvidia-jetpack.overrideScope (finalJetpack: prevJetpack: {
       socType =
         if cfg.som == null then null
         else if lib.hasPrefix "thor-" cfg.som then "t264"
@@ -254,7 +268,7 @@ final: prev: (
           inherit (cfg.firmware.secureBoot) requiredSystemFeatures;
         }
         ((finalJetpack.mkFlashScript
-          final.pkgsBuildBuild.nvidia-jetpack.flash-tools # we need flash-tools for the buildPlatform
+          nvidia-jetpack-build.flash-tools # we need flash-tools for the buildPlatform
           {
             # TODO: Remove preSignCommands when we switch to using signedFirmware directly
             flashCommands = ''
@@ -294,7 +308,7 @@ final: prev: (
         }
         (''
           ${cfg.firmware.uefi.capsuleAuthentication.preSignCommands final.buildPackages}
-          bash ${final.pkgsBuildBuild.nvidia-jetpack.flash-tools}/generate_capsule/l4t_generate_soc_capsule.sh \
+          bash ${nvidia-jetpack-build.flash-tools}/generate_capsule/l4t_generate_soc_capsule.sh \
         '' + (lib.optionalString cfg.firmware.uefi.capsuleAuthentication.enable ''
           --trusted-public-cert ${lib.escapeShellArg "${cfg.firmware.uefi.capsuleAuthentication.trustedPublicCertPemFile}"} \
           --other-public-cert ${lib.escapeShellArg "${cfg.firmware.uefi.capsuleAuthentication.otherPublicCertPemFile}"} \
@@ -311,7 +325,7 @@ final: prev: (
         in
         final.runCommand "signed-${cfg.name}-${finalJetpack.l4tMajorMinorPatchVersion}"
           { inherit (cfg.firmware.secureBoot) requiredSystemFeatures; }
-          (finalJetpack.mkFlashScript final.pkgsBuildBuild.nvidia-jetpack.flash-tools {
+          (finalJetpack.mkFlashScript nvidia-jetpack-build.flash-tools {
             flashCommands = ''
               ${cfg.firmware.secureBoot.preSignCommands final}
             '' + lib.concatMapStringsSep "\n"

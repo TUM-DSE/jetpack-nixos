@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ nvidia-jetpack, config, lib, pkgs, ... }:
 
 let
   inherit (lib)
@@ -39,7 +39,7 @@ in
 
         csv-files =
           let
-            inherit (pkgs.nvidia-jetpack) l4tCsv;
+            inherit (nvidia-jetpack) l4tCsv;
           in
           lib.map (fileName: "${l4tCsv}/${fileName}") l4tCsv.fileNames;
 
@@ -56,7 +56,7 @@ in
         extraArgs = [
           # Jetson requires `--driver-root`
           "--driver-root"
-          pkgs.nvidia-jetpack.containerDeps.outPath
+          nvidia-jetpack.containerDeps.outPath
           # `--dev-root` defaults to `/dev`, but it should be root
           "--dev-root"
           "/"
@@ -85,7 +85,7 @@ in
               # Recall that `config.hardware.graphics.extraPackages` creates l4tCoreWrapper inline, which
               # symlinks to l4t-core. In order for those symlinks to resolve, their target must also be included
               # in the list of mounts; as such, we need l4t-core.
-              pkgs.nvidia-jetpack.l4t-core
+              nvidia-jetpack.l4t-core
             ]
             ++ config.hardware.graphics.extraPackages;
           in

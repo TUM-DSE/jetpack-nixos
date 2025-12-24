@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ nvidia-jetpack, config, lib, pkgs, ... }:
 
 let
   inherit (lib)
@@ -11,7 +11,7 @@ let
 
   cfg = config.hardware.nvidia-jetpack.firmware.optee;
 
-  inherit (pkgs.nvidia-jetpack) l4tAtLeast;
+  inherit (nvidia-jetpack) l4tAtLeast;
 
   # Shared derivations used by both initrd and normal-root services.
   teeApplications = pkgs.symlinkJoin {
@@ -241,12 +241,12 @@ in
         }
         {
           assertion = !cfg.ftpm.enable
-            || pkgs.nvidia-jetpack.socType == "t234"
-            || pkgs.nvidia-jetpack.socType == "t264";
+            || nvidia-jetpack.socType == "t234"
+            || nvidia-jetpack.socType == "t264";
           message = ''
             hardware.nvidia-jetpack.firmware.optee.ftpm.enable requires
             a t234 (Orin) or t264 (Thor) SoC.
-            Got: ${pkgs.nvidia-jetpack.socType}
+            Got: ${nvidia-jetpack.socType}
           '';
         }
         {
@@ -277,11 +277,11 @@ in
       ];
 
       hardware.nvidia-jetpack.firmware.optee.supplicant.trustedApplications =
-        lib.optional cfg.pkcs11Support pkgs.nvidia-jetpack.pkcs11Ta
-        ++ lib.optional cfg.xtest pkgs.nvidia-jetpack.opteeXtest.tas;
+        lib.optional cfg.pkcs11Support nvidia-jetpack.pkcs11Ta
+        ++ lib.optional cfg.xtest nvidia-jetpack.opteeXtest.tas;
 
       hardware.nvidia-jetpack.firmware.optee.supplicant.plugins =
-        lib.optional cfg.xtest pkgs.nvidia-jetpack.opteeXtest.plugins;
+        lib.optional cfg.xtest nvidia-jetpack.opteeXtest.plugins;
 
       systemd.services.tee-supplicant = mkIf cfg.supplicant.enable {
         description = "Userspace supplicant for OPTEE-OS";
@@ -292,13 +292,13 @@ in
         conflicts = [ "shutdown.target" ];
         serviceConfig = {
           Type = "notify";
-          ExecStart = "${pkgs.nvidia-jetpack.opteeClient}/bin/tee-supplicant ${supplicantArgs}";
+          ExecStart = "${nvidia-jetpack.opteeClient}/bin/tee-supplicant ${supplicantArgs}";
           Restart = "always";
         };
         wantedBy = [ "multi-user.target" ];
       };
 
-      environment.systemPackages = lib.optional cfg.xtest pkgs.nvidia-jetpack.opteeXtest;
+      environment.systemPackages = lib.optional cfg.xtest nvidia-jetpack.opteeXtest;
     }
 
     (mkIf cfg.ftpm.enable (
@@ -307,7 +307,7 @@ in
           if cfg.supplicant.earlyBoot.enable
           then "/boot/OP-TEE/unsecureInjectEPS.hex"
           else "/var/lib/optee/ftpm/unsecureInjectEPS.hex";
-        helper = "${pkgs.nvidia-jetpack.ftpmHelperTa}/bin/nvftpm-helper-app";
+        helper = "${nvidia-jetpack.ftpmHelperTa}/bin/nvftpm-helper-app";
         # nvftpm-helper-app CLI changed between JetPack releases:
         #   JP5 (r35): -g injects EPS
         #   JP6+ (r36+): -g queries ECID, -m injects EPS
@@ -456,7 +456,7 @@ in
           fi
           EPS_VALUE=$(cat "$EPS_FILE")
           echo "Injecting EPS into fTPM..."
-          ${pkgs.nvidia-jetpack.ftpmHelperTa}/bin/nvftpm-helper-app ${if l4tAtLeast "36" then "-m" else "-g"} "$EPS_VALUE"
+          ${nvidia-jetpack.ftpmHelperTa}/bin/nvftpm-helper-app ${if l4tAtLeast "36" then "-m" else "-g"} "$EPS_VALUE"
         '';
 
         initrdStartScript = pkgs.writeShellScript "ftpm-driver-load-initrd" ''
@@ -478,11 +478,11 @@ in
 
         boot.initrd.systemd = {
           storePaths = [
-            "${pkgs.nvidia-jetpack.opteeClient}/bin/tee-supplicant"
+            "${nvidia-jetpack.opteeClient}/bin/tee-supplicant"
             "${initrdTeeApplications}"
             "${initrdSupplicantPlugins}"
             "${pkgs.kmod}/bin/modprobe"
-            "${pkgs.nvidia-jetpack.ftpmHelperTa}/bin/nvftpm-helper-app"
+            "${nvidia-jetpack.ftpmHelperTa}/bin/nvftpm-helper-app"
             "${initrdStartScript}"
           ] ++ lib.optionals cfg.ftpm.unsecureInjectEPS.enable [
             "${pkgs.coreutils}/bin/dd"
@@ -506,7 +506,7 @@ in
             conflicts = [ "shutdown.target" ];
             serviceConfig = {
               Type = "notify";
-              ExecStart = "${pkgs.nvidia-jetpack.opteeClient}/bin/tee-supplicant ${initrdSupplicantArgs}";
+              ExecStart = "${nvidia-jetpack.opteeClient}/bin/tee-supplicant ${initrdSupplicantArgs}";
               Restart = "always";
             };
             wantedBy = [ "sysinit.target" ];

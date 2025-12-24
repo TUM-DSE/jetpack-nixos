@@ -1,4 +1,3 @@
-overlay:
 { options
 , config
 , lib
@@ -27,6 +26,9 @@ let
 
   jetpackOlder = lib.versionOlder cfg.majorVersion;
   jetpackAtLeast = lib.versionAtLeast cfg.majorVersion;
+
+  # Construct nvidia-jetpack without using overlays
+  nvidia-jetpack = pkgs.callPackage ../packages.nix { inherit config; };
 in
 {
   imports = [
@@ -154,9 +156,17 @@ in
     };
   };
 
-  config = mkIf cfg.enable (lib.mkMerge [
+  config = lib.mkMerge [
+    # Pass nvidia-jetpack to all submodules via _module.args
     {
-      assertions = [
+      _module.args.nvidia-jetpack =
+        if cfg.enable
+        then nvidia-jetpack
+        else throw "nvidia-jetpack is only available when hardware.nvidia-jetpack.enable is true";
+    }
+    (mkIf cfg.enable (lib.mkMerge [
+      {
+        assertions = [
         {
           # NixOS provides two main ways to feed a package set into a config:
           # 1. The options nixpkgs.hostPlatform/nixpkgs.buildPlatform, which are
@@ -186,220 +196,195 @@ in
       ];
 
       # Use mkOptionDefault so that we prevent conflicting with the priority that
-      # `nixos-generate-config` uses.
-      nixpkgs.hostPlatform = lib.mkOptionDefault "aarch64-linux";
+        # `nixos-generate-config` uses.
+        nixpkgs.hostPlatform = lib.mkOptionDefault "aarch64-linux";
 
-      # Use mkBefore to ensure that our overlays get merged prior to any
-      # downstream jetpack-nixos users. This should prevent a situation where a
-      # user's overlay is merged before ours and that overlay depends on
-      # something defined in our overlay.
-      nixpkgs.overlays = mkBefore [
-        overlay
-        (
-          let
-            otherJetpacks = builtins.filter (v: v != cfg.majorVersion) jetpackVersions;
-          in
-          final: prev:
-            let
-              mkWarnJetpack = v: lib.warn "nvidia-jetpack${v} is unsupported when nixos is configured to use Jetpack ${cfg.majorVersion}" prev."nvidia-jetpack${v}";
-            in
-            # NOTE: While the version of `cudaPackages` drives the version of `nvidia-jetpack`, we need to set them both here since
-              # overlay-with-config needs to reference `prev.nvidia-jetpack`, so we can't wait for it to resolve via `final`.
-            {
-              nvidia-jetpack = final."nvidia-jetpack${cfg.majorVersion}";
-              cudaPackages = final."cudaPackages_${lib.versions.major final."nvidia-jetpack${cfg.majorVersion}".cudaMajorMinorVersion}";
-            }
-            # warn if anyone tries to evaluate non-default nvidia-jetpack package sets, but keep them around to avoid missing attribute errors.
-            // builtins.listToAttrs (builtins.map
-              (v: { name = "nvidia-jetpack${v}"; value = mkWarnJetpack v; })
-              otherJetpacks)
-        )
-        (import ../overlay-with-config.nix config)
-      ];
+      # Overlays disabled - using packages.nix directly to construct nvidia-jetpack
+      # nixpkgs.overlays = mkBefore [ ... ];
 
       hardware.nvidia-jetpack.console.args = lib.mkMerge [
-        (lib.optionals (checkValidSoms [ "xavier" "orin" ]) [
-          "console=tty0" # Output to HDMI/DP. May need fbcon=map:0 as well
-          "console=ttyTCU0,115200" # Provides console on "Tegra Combined UART" (TCU)
-        ])
-        (lib.optionals (checkValidSoms [ "thor" ]) [
-          "console=tty0"
-          "console=ttyUTC0,115200"
-          "earlycon=tegra_utc,mmio32,0xc5a0000"
-        ])
-      ];
+          (lib.optionals (checkValidSoms [ "xavier" "orin" ]) [
+            "console=tty0" # Output to HDMI/DP. May need fbcon=map:0 as well
+            "console=ttyTCU0,115200" # Provides console on "Tegra Combined UART" (TCU)
+          ])
+          (lib.optionals (checkValidSoms [ "thor" ]) [
+            "console=tty0"
+            "console=ttyUTC0,115200"
+            "earlycon=tegra_utc,mmio32,0xc5a0000"
+          ])
+        ];
 
       boot.kernelPackages =
-        (if cfg.kernel.realtime then
-          pkgs.nvidia-jetpack.rtkernelPackages
-        else
-          pkgs.nvidia-jetpack.kernelPackages).extend pkgs.nvidia-jetpack.kernelPackagesOverlay;
+          (if cfg.kernel.realtime then
+            nvidia-jetpack.rtkernelPackages
+          else
+            nvidia-jetpack.kernelPackages).extend nvidia-jetpack.kernelPackagesOverlay;
 
       boot.kernelParams = [
-        # Needed on Orin at least, but upstream has it for both
-        "nvidia.rm_firmware_active=all"
-      ]
-      ++ lib.optionals cfg.console.enable cfg.console.args
-      ++ lib.optionals (pkgs.nvidia-jetpack.l4tAtLeast "38") [
-        "clk_ignore_unused"
-        "swiotlb=2048"
-      ];
+          # Needed on Orin at least, but upstream has it for both
+          "nvidia.rm_firmware_active=all"
+        ]
+        ++ lib.optionals cfg.console.enable cfg.console.args
+        ++ lib.optionals (nvidia-jetpack.l4tAtLeast "38") [
+          "clk_ignore_unused"
+          "swiotlb=2048"
+        ];
 
       boot.initrd.includeDefaultModules = false; # Avoid a bunch of modules we may not get from tegra_defconfig
       boot.initrd.availableKernelModules = [ "xhci-tegra" "ucsi_ccg" "typec_ucsi" "typec" ] # Make sure USB firmware makes it into initrd
-        ++ lib.optionals (pkgs.nvidia-jetpack.l4tAtLeast "36") [
-        "nvme"
-        "tegra_mce"
-        "phy-tegra-xusb"
-        "i2c-tegra"
-        "fusb301"
-        # PCIe for nvme, ethernet, etc.
-        "phy_tegra194_p2u"
-        "pcie_tegra194"
-        # Ethernet for AGX
-        "nvpps"
-        "nvethernet"
-      ] ++ lib.optionals (pkgs.nvidia-jetpack.l4tAtLeast "38") [
-        "pwm-fan"
-        "uas"
-        "r8152"
-        "phy-tegra194-p2u"
-        "nvme-core"
-        "tegra-bpmp-thermal"
-        "pwm-tegra"
-        "tegra_vblk"
-        "tegra_hv_vblk_oops"
-        "ufs-tegra"
-        "nvpps"
-        "pcie-tegra264"
-        "nvethernet"
-        "r8126"
-        "r8168"
-        "tegra_vnet"
-        "rtl8852ce"
-        "oak_pci"
-      ];
+          ++ lib.optionals (nvidia-jetpack.l4tAtLeast "36") [
+          "nvme"
+          "tegra_mce"
+          "phy-tegra-xusb"
+          "i2c-tegra"
+          "fusb301"
+          # PCIe for nvme, ethernet, etc.
+          "phy_tegra194_p2u"
+          "pcie_tegra194"
+          # Ethernet for AGX
+          "nvpps"
+          "nvethernet"
+        ] ++ lib.optionals (nvidia-jetpack.l4tAtLeast "38") [
+          "pwm-fan"
+          "uas"
+          "r8152"
+          "phy-tegra194-p2u"
+          "nvme-core"
+          "tegra-bpmp-thermal"
+          "pwm-tegra"
+          "tegra_vblk"
+          "tegra_hv_vblk_oops"
+          "ufs-tegra"
+          "nvpps"
+          "pcie-tegra264"
+          "nvethernet"
+          "r8126"
+          "r8168"
+          "tegra_vnet"
+          "rtl8852ce"
+          "oak_pci"
+        ];
 
       # See upstream default for this option, removes any modules that aren't enabled in JetPack kernel
-      boot.initrd.luks.cryptoModules = lib.mkDefault [
-        "aes"
-        "aes_generic"
-        "cbc"
-        "xts"
-        "sha1"
-        "sha256"
-        "sha512"
-        "af_alg"
-        "algif_skcipher"
-      ];
+        boot.initrd.luks.cryptoModules = lib.mkDefault [
+          "aes"
+          "aes_generic"
+          "cbc"
+          "xts"
+          "sha1"
+          "sha256"
+          "sha512"
+          "af_alg"
+          "algif_skcipher"
+        ];
 
       boot.initrd.systemd.tpm2.enable = lib.mkIf (jetpackOlder "7") (lib.mkDefault false);
       boot.extraModulePackages = lib.optional (jetpackAtLeast "6") config.boot.kernelPackages.nvidia-oot-modules;
 
-      hardware.firmware = with pkgs.nvidia-jetpack; [
-        l4t-firmware
-      ] ++ lib.optionals (lib.versionOlder cfg.majorVersion "7") [
-        # Optional, but needed for pva_auth_allowlist firmware file used by VPI2
-        cudaPackages.vpi-firmware
-      ] ++ lib.optionals (l4tOlder "36") [
-        l4t-xusb-firmware # usb firmware also present in linux-firmware package, but that package is huge and has much more than needed
-      ] ++ lib.optionals (l4tAtLeast "38") (
-        let
-          getDriverDebs = prefix: (lib.filter (drv: lib.hasPrefix prefix (drv.pname or "")) (lib.attrValues pkgs.nvidia-jetpack.driverDebs));
-          nvidiaDriverFirmwareDebs = getDriverDebs "nvidia-firmware-";
-        in
-        nvidiaDriverFirmwareDebs
-      );
+      hardware.firmware = with nvidia-jetpack; [
+          l4t-firmware
+        ] ++ lib.optionals (lib.versionOlder cfg.majorVersion "7") [
+          # Optional, but needed for pva_auth_allowlist firmware file used by VPI2
+          cudaPackages.vpi-firmware
+        ] ++ lib.optionals (l4tOlder "36") [
+          l4t-xusb-firmware # usb firmware also present in linux-firmware package, but that package is huge and has much more than needed
+        ] ++ lib.optionals (l4tAtLeast "38") (
+          let
+            getDriverDebs = prefix: (lib.filter (drv: lib.hasPrefix prefix (drv.pname or "")) (lib.attrValues nvidia-jetpack.driverDebs));
+            nvidiaDriverFirmwareDebs = getDriverDebs "nvidia-firmware-";
+          in
+          nvidiaDriverFirmwareDebs
+        );
 
       hardware.deviceTree.enable = true;
       hardware.deviceTree.dtboBuildExtraIncludePaths = {
-        "5" = let dtsTree = "${config.hardware.deviceTree.kernelPackage.src}/nvidia"; in lib.mkMerge [
-          [
-            "${dtsTree}/soc/tegra/kernel-include"
-            "${dtsTree}/platform/tegra/common/kernel-dts"
-          ]
-          (lib.optionals (checkValidSoms [ "xavier" ]) [
-            "${dtsTree}/soc/t18x/kernel-include"
-            "${dtsTree}/soc/t18x/kernel-dts"
-            "${dtsTree}/platform/t18x/common/kernel-dts"
-          ])
-          (lib.optionals (checkValidSoms [ "orin" ]) [
-            "${dtsTree}/soc/t23x/kernel-include"
-            "${dtsTree}/soc/t23x/kernel-dts"
-            "${dtsTree}/platform/t23x/common/kernel-dts"
-            "${dtsTree}/platform/t23x/automotive/kernel-dts/common/linux/"
-          ])
-        ];
-        # See DTC_INCLUDE inside ${gitRepos."kernel-devicetree"}/generic-dts/Makefile
-        "6" = let dtsTree = "${config.hardware.deviceTree.dtbSource.src}/hardware/nvidia"; in [
-          # SOC independent common include
-          "${dtsTree}/tegra/nv-public"
+          "5" = let dtsTree = "${config.hardware.deviceTree.kernelPackage.src}/nvidia"; in lib.mkMerge [
+            [
+              "${dtsTree}/soc/tegra/kernel-include"
+              "${dtsTree}/platform/tegra/common/kernel-dts"
+            ]
+            (lib.optionals (checkValidSoms [ "xavier" ]) [
+              "${dtsTree}/soc/t18x/kernel-include"
+              "${dtsTree}/soc/t18x/kernel-dts"
+              "${dtsTree}/platform/t18x/common/kernel-dts"
+            ])
+            (lib.optionals (checkValidSoms [ "orin" ]) [
+              "${dtsTree}/soc/t23x/kernel-include"
+              "${dtsTree}/soc/t23x/kernel-dts"
+              "${dtsTree}/platform/t23x/common/kernel-dts"
+              "${dtsTree}/platform/t23x/automotive/kernel-dts/common/linux/"
+            ])
+          ];
+          # See DTC_INCLUDE inside ${gitRepos."kernel-devicetree"}/generic-dts/Makefile
+          "6" = let dtsTree = "${config.hardware.deviceTree.dtbSource.src}/hardware/nvidia"; in [
+            # SOC independent common include
+            "${dtsTree}/tegra/nv-public"
 
-          # SOC T23X specific common include
-          "${dtsTree}/t23x/nv-public/include/kernel"
-          "${dtsTree}/t23x/nv-public/include/nvidia-oot"
-          "${dtsTree}/t23x/nv-public/include/platforms"
-          "${dtsTree}/t23x/nv-public"
-        ];
-        # See DTC_INCLUDE inside ${gitRepos."kernel-devicetree"}/generic-dts/Makefile
-        "7" = let dtsTree = "${config.hardware.deviceTree.dtbSource.src}/hardware/nvidia"; in [
-          # SOC independent common include
-          "${dtsTree}/tegra/nv-public"
-          "${dtsTree}/tegra/nv-public/include/kernel"
-          "${dtsTree}/tegra/nv-public/include/nvidia-oot"
-          "${dtsTree}/tegra/nv-public/include/platforms"
+            # SOC T23X specific common include
+            "${dtsTree}/t23x/nv-public/include/kernel"
+            "${dtsTree}/t23x/nv-public/include/nvidia-oot"
+            "${dtsTree}/t23x/nv-public/include/platforms"
+            "${dtsTree}/t23x/nv-public"
+          ];
+          # See DTC_INCLUDE inside ${gitRepos."kernel-devicetree"}/generic-dts/Makefile
+          "7" = let dtsTree = "${config.hardware.deviceTree.dtbSource.src}/hardware/nvidia"; in [
+            # SOC independent common include
+            "${dtsTree}/tegra/nv-public"
+            "${dtsTree}/tegra/nv-public/include/kernel"
+            "${dtsTree}/tegra/nv-public/include/nvidia-oot"
+            "${dtsTree}/tegra/nv-public/include/platforms"
 
-          # SOC T23X specific common include
-          "${dtsTree}/t23x/nv-public/include/kernel"
-          "${dtsTree}/t23x/nv-public/include/nvidia-oot"
-          "${dtsTree}/t23x/nv-public/include/platforms"
-          "${dtsTree}/t23x/nv-public"
-          "${dtsTree}/t264/nv-public/include/kernel-t264"
-          "${dtsTree}/t264/nv-public"
-        ];
-      }.${cfg.majorVersion};
+            # SOC T23X specific common include
+            "${dtsTree}/t23x/nv-public/include/kernel"
+            "${dtsTree}/t23x/nv-public/include/nvidia-oot"
+            "${dtsTree}/t23x/nv-public/include/platforms"
+            "${dtsTree}/t23x/nv-public"
+            "${dtsTree}/t264/nv-public/include/kernel-t264"
+            "${dtsTree}/t264/nv-public"
+          ];
+        }.${cfg.majorVersion};
 
       services.udev.packages = [
-        (pkgs.runCommand "jetson-udev-rules" { } ''
-          install -D ${pkgs.nvidia-jetpack.l4t-init}/etc/udev/rules.d/99-tegra-devices.rules \
-            $out/etc/udev/rules.d/90-tegra-devices.rules
-          sed -i \
-            -e '/camera_device_detect/d' \
-            -e 's#/bin/mknod#${lib.getExe' pkgs.coreutils "mknod"}#' \
-            -e 's#/bin/rm#${lib.getExe' pkgs.coreutils "rm"}#' \
-            -e 's#/bin/cut#${lib.getExe' pkgs.coreutils "cut"}#' \
-            -e 's#/bin/grep#${lib.getExe pkgs.gnugrep}#' \
-            -e 's#/bin/bash /etc/systemd/nvpower.sh#${pkgs.nvidia-jetpack.l4t-nvpmodel}/etc/systemd/nvpower.sh#' \
-            -e 's#/bin/bash#${lib.getExe pkgs.bash}#' \
-            $out/etc/udev/rules.d/90-tegra-devices.rules
-        '')
-      ];
+          (pkgs.runCommand "jetson-udev-rules" { } ''
+            install -D ${nvidia-jetpack.l4t-init}/etc/udev/rules.d/99-tegra-devices.rules \
+              $out/etc/udev/rules.d/90-tegra-devices.rules
+            sed -i \
+              -e '/camera_device_detect/d' \
+              -e 's#/bin/mknod#${lib.getExe' pkgs.coreutils "mknod"}#' \
+              -e 's#/bin/rm#${lib.getExe' pkgs.coreutils "rm"}#' \
+              -e 's#/bin/cut#${lib.getExe' pkgs.coreutils "cut"}#' \
+              -e 's#/bin/grep#${lib.getExe pkgs.gnugrep}#' \
+              -e 's#/bin/bash /etc/systemd/nvpower.sh#${nvidia-jetpack.l4t-nvpmodel}/etc/systemd/nvpower.sh#' \
+              -e 's#/bin/bash#${lib.getExe pkgs.bash}#' \
+              $out/etc/udev/rules.d/90-tegra-devices.rules
+          '')
+        ];
 
       # Used by libjetsonpower.so, which is used by nvfancontrol at least.
-      environment.etc."nvpower/libjetsonpower".source = "${pkgs.nvidia-jetpack.l4t-tools}/etc/nvpower/libjetsonpower";
+        environment.etc."nvpower/libjetsonpower".source = "${nvidia-jetpack.l4t-tools}/etc/nvpower/libjetsonpower";
 
       # Include nv_tegra_release, just so we can tell what version our NixOS machine was built from.
-      environment.etc."nv_tegra_release".source = "${pkgs.nvidia-jetpack.l4t-core}/etc/nv_tegra_release";
+        environment.etc."nv_tegra_release".source = "${nvidia-jetpack.l4t-core}/etc/nv_tegra_release";
 
       # https://developer.ridgerun.com/wiki/index.php/Xavier/JetPack_5.0.2/Performance_Tuning
-      systemd.services.jetson_clocks = mkIf cfg.maxClock {
-        enable = true;
-        description = "Set maximum clock speed";
-        serviceConfig = {
-          Type = "oneshot";
-          ExecStart = "${pkgs.nvidia-jetpack.l4t-tools}/bin/jetson_clocks";
+        systemd.services.jetson_clocks = mkIf cfg.maxClock {
+          enable = true;
+          description = "Set maximum clock speed";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${nvidia-jetpack.l4t-tools}/bin/jetson_clocks";
+          };
+          after = [ "nvpmodel.service" ];
+          wantedBy = [ "multi-user.target" ];
         };
-        after = [ "nvpmodel.service" ];
-        wantedBy = [ "multi-user.target" ];
-      };
 
-      environment.systemPackages = with pkgs.nvidia-jetpack; [
-        l4t-tools
-        otaUtils # Tools for UEFI capsule updates
-      ]
-      # Tool to view GPU utilization.
-      ++ lib.optionals (l4tAtLeast "36") [ nvidia-smi ]
-      ++ lib.optionals (l4tAtLeast "38") [ l4t-bootloader-utils ];
+      environment.systemPackages = with nvidia-jetpack; [
+          l4t-tools
+          otaUtils # Tools for UEFI capsule updates
+        ]
+        # Tool to view GPU utilization.
+        ++ lib.optionals (l4tAtLeast "36") [ nvidia-smi ]
+        ++ lib.optionals (l4tAtLeast "38") [ l4t-bootloader-utils ];
     }
     (lib.mkIf (jetpackAtLeast "6") {
       hardware.deviceTree.dtbSource = config.boot.kernelPackages.devicetree;
@@ -408,5 +393,6 @@ in
       # to appear sufficiently early in the `lsm=<list of security modules>` kernel argument
       security.lsm = lib.mkIf config.security.apparmor.enable (mkBefore [ "apparmor" ]);
     })
-  ]);
+  ]))
+  ];
 }

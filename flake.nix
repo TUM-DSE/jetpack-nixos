@@ -146,7 +146,7 @@
       }
       // supportedNixOSConfigurations;
 
-      nixosModules.default = import ./modules/default.nix self.overlays.default;
+      nixosModules.default = ./modules/default.nix;
 
       overlays.default = final: prev:
         # We've already applied our overlay and should not apply it again.

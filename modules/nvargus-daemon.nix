@@ -1,4 +1,4 @@
-{ pkgs, config, lib, ... }:
+{ nvidia-jetpack, pkgs, config, lib, ... }:
 
 let
   inherit (lib)
@@ -37,7 +37,7 @@ in
       enable = true;
       description = "Argus daemon";
       serviceConfig = {
-        ExecStart = "${pkgs.nvidia-jetpack.l4t-camera}/bin/nvargus-daemon";
+        ExecStart = "${nvidia-jetpack.l4t-camera}/bin/nvargus-daemon";
         Restart = "on-failure";
         RestartSec = 4;
       };
